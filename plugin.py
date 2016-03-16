@@ -11,15 +11,15 @@
 # Version 2:
 # Register all functions used in `all_func`
 
-from utils import Memcache, MyDB
+from utils import Memcache, MyDB, UserMod
 from config import ReplyStrings, AdvancedSettings, Coin
 import random, logging, sys
 
 all_func_single = ['Common.blank_check', 'Common.black_list', 'Common.block_words_check', 'Game.query_coin',
                    'Game.lotty', 'PreDefinedMessage.all', 'Common.chat'
                    ]
-all_func_group = ['GroupChat.check_at_me', 'Common.blank_check', 'Common.black_list', 'Game.lotty',
-                  'Game.query_coin', 'PreDefinedMessage.all', 'Common.block_words_check', 'Common.chat'
+all_func_group = ['GroupChat.check_at_me', 'Common.blank_check', 'Common.black_list', 'GroupChat.disable_group',
+                  'Game.lotty', 'Game.query_coin', 'PreDefinedMessage.all', 'Common.block_words_check', 'Common.chat'
                   ]
 
 
@@ -183,5 +183,30 @@ class GroupChat:
         sender = msg[u'sender']
         my_name = msg[u'receiver']
         if message.find(u'@' + my_name) == -1:
+            return True, u''
+        return False, u''
+
+    @staticmethod
+    def disable_group(msg):
+        message = msg[u'content']
+        sender_qq = msg[u'sender_qq']
+        sender = msg[u'sender']
+        gid = msg[u'gnumber']
+        my_name = msg[u'receiver']
+        message = message.replace(u'@' + my_name, u'').strip()
+        if message in ReplyStrings.disable_group or message in ReplyStrings.enable_group:
+            u = UserMod()
+            r = u.check_group_admin(gid, sender_qq)
+            if r == u.IS_ADMIN:
+                db = MyDB()
+                if message in ReplyStrings.enable_group:
+                    db.disable_group(gid, False)
+                    return True, ReplyStrings.group_enable
+                else:
+                    db.disable_group(gid, True)
+                    return True, ReplyStrings.group_disable
+            return True, ReplyStrings.group_admin_info[r]
+        mem = Memcache()
+        if not mem.check_disable_group(gid):
             return True, u''
         return False, u''

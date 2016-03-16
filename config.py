@@ -44,6 +44,12 @@ class ReplyStrings:
     coin_count = u'您当前有%d个硬币~\n和我聊天或教我可以增加金币哦!'
     help = [u'帮助', u'help']
     user_help = u'现在支持的指令: 学习、抽奖、金币、帮助'
+    disable_group = [u'disable', u'关闭群聊', u'关闭群功能']
+    enable_group = [u'enable', u'开启群聊', u'开启群功能']
+    group_admin_info = [u'对不起,你不是群管理员,无法操作群设置哦', u'后台出错啦~找不到群信息...稍后再试试吧!',
+                        u'后台出错啦~找不到用户信息...可能你是新加的成员?稍后再试试吧!']  # This is not random choice!
+    group_enable = u'群功能已开启~@我就可以和我对话啦~'
+    group_disable = u'群功能已关闭.\n只有群管理员@我并发送"开启群功能"后我才会参与对话哦~\拜~'
 
 
 class FuncSettings:

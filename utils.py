@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding:utf-8
 
-import MySQLdb, time, logging
+import MySQLdb, time, logging, requests, json
 import jieba.posseg as pseg
 from werkzeug.contrib.cache import MemcachedCache
 from config import Credentials, AdvancedSettings
@@ -107,6 +107,15 @@ class Memcache:
         self.set(u'BG'+str(gid), is_blocked)
         return is_blocked
 
+    def check_disable_group(self, gid):
+        x = self.get(u'BD'+str(gid))
+        if x is not None:
+            return x
+        db = MyDB()
+        is_disabled = db.check_disabled(gid)
+        self.set(u'BD'+str(gid), is_disabled)
+        return is_disabled
+
 
 class MyDB:
     def __init__(self):
@@ -176,9 +185,13 @@ class MyDB:
         mem = Memcache()
         mem.delete(u'BG'+str(gid))
 
-    def disable_group(self, gid):
-        sql = "UPDATE `group` SET `disabled`=1 WHERE `gid`=%s"
+    def disable_group(self, gid, disable=False):
+        sql = "UPDATE `group` SET `disabled`=0 WHERE `gid`=%s"
+        if disable:
+            sql = "UPDATE `group` SET `disabled`=1 WHERE `gid`=%s"
         self.execute(sql, (gid,))
+        mem = Memcache()
+        mem.delete(u'BD'+str(gid))
 
     def top_user(self):
         sql = "SELECT * FROM `user` ORDER BY `coin` DESC LIMIT 15"
@@ -218,6 +231,16 @@ class MyDB:
             return False
         return True
 
+    def check_disabled(self, gid):
+        ginfo = self.get_group_info(gid)
+        if not ginfo:
+            self.init_group(gid)
+            return True
+        if ginfo[1] and ginfo[1] == 1:
+            return False
+        return True
+
+
     def mod_coin(self, qid, x):
         x = int(x)
         if x < 0:
@@ -227,3 +250,27 @@ class MyDB:
         sql = "UPDATE `user` SET `coin`=`coin`+" + x + " WHERE `uid`=%s"
         cursor = self.db.cursor()
         self.execute(sql, (qid,))
+
+class UserMod:
+    IS_ADMIN = 3
+    NOT_ADMIN = 0
+    NO_GROUP_INFO = 1
+    NO_USER_INFO = 2
+
+    def check_group_admin(self, gid, qid):
+        url = "%s/openqq/get_group_info" % Credentials.comm_url
+        groups = json.loads(requests.get(url).content)
+        gid, qid = int(gid), int(qid)
+        group = filter(lambda g: int(g[u'gnumber']) == gid, groups)
+        if group:
+            group = group[0]
+            admins = map(lambda member: int(member[u'qq']),
+                         filter(lambda x: x[u'role'] == u'admin' or x[u'role'] == u'owner', group[u'member'])
+                         )
+            if qid in admins:
+                return self.IS_ADMIN
+            me = filter(lambda x: int(x[u'qq']) == qid, group[u'member'])
+            if me:
+                return self.NOT_ADMIN
+            return self.NO_USER_INFO
+        return self.NO_GROUP_INFO
