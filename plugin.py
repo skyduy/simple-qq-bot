@@ -15,10 +15,12 @@ from utils import Memcache, MyDB
 from config import ReplyStrings, AdvancedSettings, Coin
 import random, logging, sys
 
-all_func_single = ['Common.blank_check', 'Common.black_list', 'Common.block_words_check', 'Game.lotty',
-                   'PreDefinedMessage.all', 'Common.chat']
+all_func_single = ['Common.blank_check', 'Common.black_list', 'Common.block_words_check', 'Game.query_coin',
+                   'Game.lotty', 'PreDefinedMessage.all', 'Common.chat'
+                   ]
 all_func_group = ['GroupChat.check_at_me', 'Common.blank_check', 'Common.black_list', 'Game.lotty',
-                  'PreDefinedMessage.all', 'Common.block_words_check', 'Common.chat']
+                  'Game.query_coin', 'PreDefinedMessage.all', 'Common.block_words_check', 'Common.chat'
+                  ]
 
 
 class Common:
@@ -99,6 +101,22 @@ class Common:
 
 class Game:
     @staticmethod
+    def query_coin(msg):
+        message = msg[u'content']
+        sender_qq = msg[u'sender_qq']
+        db = MyDB()
+        if msg[u'type'] == u'group_message':
+            my_name = msg[u'receiver']
+            message = message.replace(u'@' + my_name, u'').strip()
+        if message.lower() in ReplyStrings.query_coin:
+            user = db.get_user_info(sender_qq)
+            if not user:
+                return True, ReplyStrings.unknown_error
+            coin = user[1]
+            return True, ReplyStrings.coin_count % coin
+        return False, u''
+
+    @staticmethod
     def lotty(msg):
         message = msg[u'content']
         sender_qq = msg[u'sender_qq']
@@ -140,6 +158,15 @@ class PreDefinedMessage:
             message = message.replace(u'@' + my_name, u'').strip()
         if message in ReplyStrings.about:
             return ReplyStrings.about_message
+
+    @staticmethod
+    def help_info(msg):
+        message = msg[u'content'].lower()
+        if msg[u'type'] == u'group_message':
+            my_name = msg[u'receiver']
+            message = message.replace(u'@' + my_name, u'').strip()
+        if message in ReplyStrings.help:
+            return ReplyStrings.user_help
 
 
 class SingleChat:

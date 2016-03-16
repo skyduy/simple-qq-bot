@@ -33,7 +33,7 @@ class BotManage:
         mt = msg[u'content'].split(' ')[0]
         content = msg[u'content'][(len(mt) + 1):]
         db.delete_talk(sender_qq, content, is_super=True)
-        return ReplyStrings.delete_successful
+        return ReplyStrings.delete_success
 
     @staticmethod
     def blockuser(message, sender_qq, sender, msg):
@@ -141,6 +141,9 @@ class QQMessage:
                     break
 
     def proc_group_message(self):
+        # -----Global_switch-----
+        if not FuncSettings.enable_group:
+            return
         # -----Extensions-----
         # plugin_list = dir(__import__("plugin"))
         plugin_list = plugin.all_func_group

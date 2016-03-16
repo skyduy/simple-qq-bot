@@ -26,19 +26,24 @@ class ReplyStrings:
     invalid_command = u'指令格式不正确233333'
     about_message = u'This is an simple and open-source chat bot.\n' \
                     u'Developed by ihciah, inspired by StoneMoe and QQ515912540\n' \
+                    u'Github repo: https://github.com/ihciah/simple-qq-bot\n' \
                     u'Contact c@ihc.im if you need some help:)'
     about = [u'about', u'关于', u'你是谁']
     lotty = [u'乐透', u'抽奖']
     insufficient_coin = u'啊哦...抽奖需要消耗%d个金币,但是你只有%d个\n(多和我聊天或者教我可以获得金币哦~'
     lotty_win = u'你抽中了%d个金币！人品好的话最高可赢%d哦'
     unknown_error = u'未知错误...'
-    delete_successful = u'相关词条已删除'
+    delete_success = u'相关词条已删除'
     qq = u'QQ'
     coin = u'金币'
     user_line = u'QQ%d 金币%d'
     talk_line = u'Q:%s\nA:%s\nUSER:%d\nTIME:%s'
     information_about = u'有关%s的所有消息:\n'
     users_about = u'有关用户%d的所有消息:\n'
+    query_coin = [u'金币', u'硬币', u'查询金币', u'coin']
+    coin_count = u'您当前有%d个硬币~\n和我聊天或教我可以增加金币哦!'
+    help = [u'帮助', u'help']
+    user_help = u'现在支持的指令: 学习、抽奖、金币、帮助'
 
 
 class FuncSettings:
