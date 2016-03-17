@@ -11,8 +11,8 @@
 # Version 2:
 # Register all functions used in `all_func`
 
-from utils import Memcache, MyDB, UserMod
-from config import ReplyStrings, AdvancedSettings, Coin
+from utils import Memcache, MyDB, UserMod, TuringBot
+from config import ReplyStrings, AdvancedSettings, Coin, FuncSettings
 import random, logging, sys
 
 all_func_single = ['Common.blank_check', 'Common.black_list', 'Common.block_words_check', 'Game.query_coin',
@@ -93,7 +93,13 @@ class Common:
         answer = db.query_question(message)
         logging.info(answer)
         if answer is None:
-            fail_message = random.choice(ReplyStrings.not_found_messages)
+            if FuncSettings.turing_robot_enabled and AdvancedSettings.turing_robot_api:
+                turing_bot = TuringBot(message, sender_qq)
+                fail_message = turing_bot.proc_message()
+                if fail_message == u'':
+                    fail_message = random.choice(ReplyStrings.not_found_messages)
+            else:
+                fail_message = random.choice(ReplyStrings.not_found_messages)
             return True, fail_message
         db.mod_coin(sender_qq, Coin.chat)
         return True, answer[1]
