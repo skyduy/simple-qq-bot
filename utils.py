@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding:utf-8
 
-import MySQLdb, time, logging, requests, json
+import MySQLdb, time, logging, requests, json, random, hashlib
 import jieba.posseg as pseg
 from werkzeug.contrib.cache import MemcachedCache
 from config import Credentials, AdvancedSettings
@@ -274,3 +274,30 @@ class UserMod:
                 return self.NOT_ADMIN
             return self.NO_USER_INFO
         return self.NO_GROUP_INFO
+
+
+class TuringBot:
+    def proc_message(self):
+        content = json.loads(self.content)
+        if content[u'code'] == 100000:
+            # Text
+            return content[u'text']
+        if AdvancedSettings.turing_robot_only_text:
+            return u''
+        if content[u'code'] == 200000:
+            # Link
+            return content[u'text'] + u'\n' + content[u'url']
+        if content[u'code'] == 302000:
+            # News
+            return content[u'text'] + u'\n' + u'\n'.join(map(lambda x: x[u'article'], content[u'list']))
+        if content[u'code'] == 308000:
+            # Cookbook
+            return content[u'text'] + u'\n' + u'\n'.join(map(lambda x: x[u'info'], content[u'list']))
+        return u''
+
+    def __init__(self, info, userid):
+        self.content = requests.post(AdvancedSettings.turing_robot_url,
+                                     {'key': random.choice(AdvancedSettings.turing_robot_api),
+                                      'info': info.encode('utf-8'),
+                                      'userid': hashlib.md5(AdvancedSettings.turing_robot_userid_salt + str(userid)).hexdigest()
+                                      }).content
