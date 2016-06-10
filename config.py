@@ -4,9 +4,9 @@
 
 MYSQL_HOST = 'localhost'
 MYSQL_PORT = '3306'
-MYSQL_USER = 'wc'  # your username
-MYSQL_PASS = 'wcd'  # your password
-MYSQL_DB = 'wechat'
+MYSQL_USER = 'username'  # your username
+MYSQL_PASS = 'password'  # your password
+MYSQL_DB = 'database'
 
 
 class Credentials:
