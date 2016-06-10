@@ -4,8 +4,12 @@
 from flask import Flask, request
 import traceback, logging
 from msg_proc import QQMessage
+from model import init_db
 
 app = Flask(__name__)
+db = init_db(app)
+with app.app_context():
+    db.create_all()
 
 
 def qqbot_main(data):

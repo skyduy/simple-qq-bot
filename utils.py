@@ -1,255 +1,18 @@
 #!/usr/bin/env python
 # coding:utf-8
+from __future__ import unicode_literals
+import requests
+import json
+import re
+import urllib2
+import collections
+from config import Credentials
+import redis
+import jieba
+from collections import Counter
+jieba.initialize()
+redis_store = redis.Redis('localhost', 6379, db=1)
 
-import MySQLdb, time, logging, requests, json, random, hashlib
-import jieba.posseg as pseg
-from werkzeug.contrib.cache import MemcachedCache
-from config import Credentials, AdvancedSettings
-
-
-class Word:
-    @staticmethod
-    def remove_symbols(string):
-        for i in AdvancedSettings.remove_words_list:
-            string = string.replace(i, u'')
-        return string
-
-    @staticmethod
-    def gen_trunk(string):
-        words = pseg.cut(string)
-        trunk = map(lambda y: y.word, filter(lambda x: x.flag in AdvancedSettings.trunk_list, words))
-        return trunk
-
-
-class Memcache:
-    WAIT_ASK = 1
-    WAIT_ANSWER = 2
-
-    def __init__(self):
-        self.cache = MemcachedCache(['127.0.0.1:11211'])
-
-    def get(self, key):
-        ret = self.cache.get(key)
-        try:
-            ret = ret.decode('utf-8')
-        except:
-            pass
-        return ret
-
-    def set(self, key, value):
-        try:
-            value = value.encode('utf-8')
-        except:
-            pass
-        return self.cache.set(key, value, timeout=600)
-
-    def delete(self, key):
-        return self.cache.delete(key)
-
-    def check_history(self, qid, gid=0):
-        r = self.get(u'H' + str(qid) + u'G' + str(gid))
-        if r is None:
-            return r, r
-        if r == self.WAIT_ANSWER:
-            return self.WAIT_ANSWER, self.get(u'A' + str(qid) + u'G' + str(gid))
-        if r == self.WAIT_ASK:
-            return self.WAIT_ASK, None
-        return None
-
-    def set_before_ask(self, qid, gid=0):
-        self.set(u'H' + str(qid) + u'G' + str(gid), self.WAIT_ASK)
-
-    def set_before_answer(self, qid, ask, gid=0):
-        self.set(u'A' + str(qid) + u'G' + str(gid), ask)
-        self.set(u'H' + str(qid) + u'G' + str(gid), self.WAIT_ANSWER)
-
-    def clear_state(self, qid, gid=0):
-        self.delete(u'A' + str(qid) + u'G' + str(gid))
-        self.delete(u'H' + str(qid) + u'G' + str(gid))
-
-    def last_warn_time(self, qid):
-        self.set(u'W'+str(qid), time.time())
-
-    def check_last_chat_same(self, qid, msg):
-        if self.get(u'LC'+str(qid)) and self.get(u'LC'+str(qid)) == msg:
-            return self.last_chat_count(qid, add=True)
-        self.set(u'LC'+str(qid), msg)
-        self.set(u'LCC'+str(qid), 1)
-        return True
-
-    def last_chat_count(self, qid, add=False):
-        lcc = self.get(u'LCC'+str(qid))
-        if not lcc:
-            self.set(u'LCC'+str(qid), 1)
-            return True
-        if add and lcc <= AdvancedSettings.same_response_limit:
-            self.cache.inc(u'LCC'+str(qid))
-            lcc += 1
-        return lcc < AdvancedSettings.same_response_limit
-
-    def check_block_user(self, qid):
-        x = self.get(u'BU'+str(qid))
-        if x is not None:
-            return x
-        db = MyDB()
-        is_blocked = db.check_blocked(qid, 'user')
-        logging.info("is_blocked")
-        logging.info(is_blocked)
-        self.set(u'BU'+str(qid), is_blocked)
-        return is_blocked
-
-    def check_block_group(self, gid):
-        x = self.get(u'BG'+str(gid))
-        if x is not None:
-            return x
-        db = MyDB()
-        is_blocked = db.check_blocked(gid, 'group')
-        self.set(u'BG'+str(gid), is_blocked)
-        return is_blocked
-
-    def check_disable_group(self, gid):
-        x = self.get(u'BD'+str(gid))
-        if x is not None:
-            return x
-        db = MyDB()
-        is_disabled = db.check_disabled(gid)
-        self.set(u'BD'+str(gid), is_disabled)
-        return is_disabled
-
-
-class MyDB:
-    def __init__(self):
-        self.db = MySQLdb.connect(host=Credentials.database[0],
-                                  user=Credentials.database_account[0],
-                                  passwd=Credentials.database_account[1],
-                                  db=Credentials.database[1],
-                                  charset='utf8'
-                                  )
-        self.db.autocommit(True)
-
-    def __del__(self):
-        self.db.close()
-
-    def execute(self, sql, params=tuple()):
-        cursor = self.db.cursor()
-        try:
-            cursor.execute(sql, params)
-        except:
-            pass
-        return cursor
-
-    def query_exact_question(self, question):
-        # question = Word.remove_symbols(question)
-        sql = "SELECT * FROM `chat` WHERE `ask`=%s AND `deleted`!=1 ORDER BY RAND() LIMIT 1"
-        return self.execute(sql, (question,)).fetchone()
-
-    def query_admin(self, question):
-        sql = "SELECT * FROM `chat` WHERE `ask` LIKE %%s% AND `deleted`!=1 LIMIT 30"
-        return self.execute(sql, (question,)).fetchone()
-
-    def query_question(self, question):
-        question = Word.remove_symbols(question)
-        data = self.query_exact_question(question)
-        if data is not None:
-            return data
-        query_string = u'%'.join(Word.gen_trunk(question))
-        sql = "SELECT * FROM `chat` WHERE `ask` LIKE %s AND `deleted`!=1 ORDER BY RAND() LIMIT 1"
-        return self.execute(sql, (question,)).fetchone()
-
-    def insert_chat(self, ask, answer, committer, gid=0):
-        ask = Word.remove_symbols(ask)
-        sql = "INSERT INTO `chat`(`ask`,`answer`,`committer`,`gid`,`time`) VALUES(%s,%s,%s,%s,NOW())"
-        self.execute(sql, (ask, answer, committer, gid))
-
-    def get_user_info(self, qid):
-        sql = "SELECT * FROM `user` WHERE `uid`=%s"
-        return self.execute(sql, (qid,)).fetchone()
-
-    def get_group_info(self, gid):
-        sql = "SELECT * FROM `group` WHERE `gid`=%s"
-        return self.execute(sql, (gid,)).fetchone()
-
-    def block_user(self, qid, unblock=False):
-        sql = "UPDATE `user` SET `blocked`=1 WHERE `uid`=%s"
-        if unblock:
-            sql = "UPDATE `user` SET `blocked`=0 WHERE `uid`=%s"
-        self.execute(sql, (qid,))
-        mem = Memcache()
-        mem.delete(u'BU'+str(qid))
-
-    def block_group(self, gid, unblock=False):
-        sql = "UPDATE `group` SET `blocked`=1 WHERE `gid`=%s"
-        if unblock:
-            sql = "UPDATE `group` SET `blocked`=1 WHERE `gid`=%s"
-        self.execute(sql, (gid,))
-        mem = Memcache()
-        mem.delete(u'BG'+str(gid))
-
-    def disable_group(self, gid, disable=False):
-        sql = "UPDATE `group` SET `disabled`=0 WHERE `gid`=%s"
-        if disable:
-            sql = "UPDATE `group` SET `disabled`=1 WHERE `gid`=%s"
-        self.execute(sql, (gid,))
-        mem = Memcache()
-        mem.delete(u'BD'+str(gid))
-
-    def top_user(self):
-        sql = "SELECT * FROM `user` ORDER BY `coin` DESC LIMIT 15"
-        return self.execute(sql).fetchall()
-
-    def delete_talk(self, qid, content, is_super=False):
-        if not is_super:
-            sql = "UPDATE `chat` SET `deleted`=1 WHERE `uid`=%s AND `ask`=%s"
-            self.execute(sql, (qid, content))
-        else:
-            sql = "UPDATE `chat` SET `deleted`=1 WHERE `ask`=%s"
-            self.execute(sql, (content,))
-
-
-    def init_user(self, qid):
-        sql = "INSERT INTO `user`(`uid`) VALUES(%s)"
-        self.execute(sql, (qid,))
-
-    def init_group(self, gid):
-        sql = "INSERT INTO `group`(`gid`) VALUES(%s)"
-        self.execute(sql, (gid,))
-
-    def check_blocked(self, xid, type='user'):
-        if type == 'user':
-            info = self.get_user_info(xid)
-            if not info:
-                self.init_user(xid)
-                return True
-            if info[2] and info[2] == 1:
-                return False
-            return True
-        ginfo = self.get_group_info(xid)
-        if not ginfo:
-            self.init_group(xid)
-            return True
-        if ginfo[2] and ginfo[2] == 1:
-            return False
-        return True
-
-    def check_disabled(self, gid):
-        ginfo = self.get_group_info(gid)
-        if not ginfo:
-            self.init_group(gid)
-            return True
-        if ginfo[1] and ginfo[1] == 1:
-            return False
-        return True
-
-
-    def mod_coin(self, qid, x):
-        x = int(x)
-        if x < 0:
-            x = str(x)
-        else:
-            x = '+' + str(x)
-        sql = "UPDATE `user` SET `coin`=`coin`+" + x + " WHERE `uid`=%s"
-        cursor = self.db.cursor()
-        self.execute(sql, (qid,))
 
 class UserMod:
     IS_ADMIN = 3
@@ -276,28 +39,84 @@ class UserMod:
         return self.NO_GROUP_INFO
 
 
-class TuringBot:
-    def proc_message(self):
-        content = json.loads(self.content)
-        if content[u'code'] == 100000:
-            # Text
-            return content[u'text']
-        if AdvancedSettings.turing_robot_only_text:
-            return u''
-        if content[u'code'] == 200000:
-            # Link
-            return content[u'text'] + u'\n' + content[u'url']
-        if content[u'code'] == 302000:
-            # News
-            return content[u'text'] + u'\n' + u'\n'.join(map(lambda x: x[u'article'], content[u'list']))
-        if content[u'code'] == 308000:
-            # Cookbook
-            return content[u'text'] + u'\n' + u'\n'.join(map(lambda x: x[u'info'], content[u'list']))
-        return u''
+def id_from_redis(content):
+    def get_len(d):
+        length = 0
+        for i in d.values():
+            i = int(i)
+            length += i ** 2
+        length = pow(length, 0.5)
+        return length * 1.0
+    contents = {}
+    raw_contents = Counter(jieba.cut(content))
+    for k, v in raw_contents.iteritems():
+        contents[k.encode("utf-8")] = v
+    content_keys_set = set(contents.keys())
+    len1 = get_len(raw_contents)
 
-    def __init__(self, info, userid):
-        self.content = requests.post(AdvancedSettings.turing_robot_url,
-                                     {'key': random.choice(AdvancedSettings.turing_robot_api),
-                                      'info': info.encode('utf-8'),
-                                      'userid': hashlib.md5(AdvancedSettings.turing_robot_userid_salt + str(userid)).hexdigest()
-                                      }).content
+    keys = redis_store.keys()
+    kv = {}
+    for key in keys:
+        questions = redis_store.hgetall(key)
+        question_keys_set = set(questions.keys())
+        common_keys_set = content_keys_set & question_keys_set
+        if common_keys_set:
+            tmp = 0
+            for item in common_keys_set:
+                tmp += contents[item] * int(questions[item])
+            len2 = get_len(questions)
+            rate = tmp / (len1 * len2)
+            if rate > 0.52:
+                kv.setdefault(rate, [])
+                kv[rate].append(key)
+    if len(kv) == 0:
+        return None
+    rate = max(kv.keys())
+    ids = kv[rate]
+    return ids
+
+
+def content_to_redis(questions, qa_id):
+    return redis_store.hmset(qa_id, Counter(jieba.cut(questions)))
+
+
+def convert(data):
+    if isinstance(data, basestring):
+        return str(data)
+    elif isinstance(data, collections.Mapping):
+        return dict(map(convert, data.iteritems()))
+    elif isinstance(data, collections.Iterable):
+        return type(data)(map(convert, data))
+    else:
+        return data
+
+
+def fetch_jokes():
+    page = 1
+    results = []
+    while len(results) < 40:
+        url = 'http://www.qiushibaike.com/text/page/%s/' % page
+        headers = {
+            'UserHost': 'www.qiushibaike.com',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'max-age=0',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/42.0.2311.90 Safari/537.36',
+            'DNT': 1,
+            'Accept-Encoding': 'unicode, utf-8, gb2312, gbk',
+            'Accept-Language': 'zh-CN,zh;q=0.8',
+        }
+        request = urllib2.Request(url, headers=convert(headers))
+        response = urllib2.urlopen(request)
+        content = response.read().decode('utf-8', 'ignore')
+        pattern = re.compile(
+            '<div class="content">(.*?)</div>',
+            re.S
+        )
+        items = re.findall(pattern, content)
+        for item in items:
+            joke = item.strip().replace('<br/>', '\n').replace('&quot;', '"')
+            results.append(joke)
+        page += 1
+    return results
