@@ -11,7 +11,7 @@ from config import ReplyStrings
 
 all_func_group = [
     'GroupChat.check_at_me', 'Common.blank_check', 'GroupChat.disable_group',
-    'Game.query_coin', 'PreDefinedMessage.all', 'Common.chat'
+    'Game.query_coin', 'Game.get_joke', 'PreDefinedMessage.all', 'Common.chat'
 ]
 
 
@@ -28,20 +28,21 @@ class GroupChat:
         message = msg[u'content']
         sender_qq = msg[u'sender_qq']
         gid = msg[u'gnumber']
+        gid = str(gid)
         message = message.replace(u'/', u'').strip()
-        redis_store = Redis('localhost', 6379, db=2)
+        redis_store = Redis('localhost', 6379)
         if message in ReplyStrings.disable_group or message in ReplyStrings.enable_group:
             u = UserMod()
             r = u.check_group_admin(gid, sender_qq)
             if r == u.IS_ADMIN:
                 if message in ReplyStrings.enable_group:
-                    redis_store.set(u'group-%s-enable' % gid, 1)
+                    redis_store.set('group-'+gid+'-enable', 1)
                     return True, ReplyStrings.group_enable
                 else:
-                    redis_store.set(u'group-%s-enable' % gid, 0)
+                    redis_store.set('group-'+gid+'-enable', 0)
                     return True, ReplyStrings.group_disable
             return True, ReplyStrings.group_admin_info[r]
-        r = redis_store.get(u'group-%s-enable' % gid)
+        r = redis_store.get('group-'+gid+'-enable')
         if r is not None and int(r) == 1:
             return True, u''
         return False, u''
@@ -63,6 +64,7 @@ class Common:
         redis_store = Redis('localhost', 6379)
         message = msg[u'content']
         sender_qq = msg[u'sender_qq']
+        sender_qq = str(sender_qq)
         sender = msg[u'sender']
         type = msg[u'type']
         if type == u'group_message':
@@ -81,7 +83,7 @@ class Common:
                 else:
                     tmp_state = (tmp_state + 1) % 3
                     redis_store.set(key, tmp_state, 3600)
-                return True, '@%s 输入问题：' % sender
+                return True, '输入问题：'
             else:
                 from model import Record
                 question_answer = Record(message, sender_qq)
@@ -109,7 +111,7 @@ class Common:
                 else:
                     tmp_state = (tmp_state + 1) % 3
                     redis_store.set(key, tmp_state, 3600)
-                return True, '@%s 对于问题：%s\n输入您的答案:' % (sender, message)
+                return True, '对于问题：%s\n输入您的答案:' % message
 
         if state == '2':
             key = 'state-' + sender_qq
@@ -122,7 +124,7 @@ class Common:
 
             question = redis_store.get('question-' + sender_qq)
             if not question:
-                return True, '@%s 呜...小D只知道你在一小时或者更久之前问过问题，但是忘记问题是什么了...' % sender
+                return True, '呜...小D只知道你在一小时或者更久之前问过问题，但是忘记问题是什么了...'
             else:
                 from model import QA
                 question_answer = QA(question, message, sender_qq)
@@ -130,7 +132,7 @@ class Common:
                 redis_store.incr('money-' + sender_qq, 10)
                 qa_id = r.id
                 content_to_redis(question, qa_id)
-                return True, '@%s 问题：%s\n答案：%s\n学习成功:)' % (sender, question, message.encode('utf-8'))
+                return True, '\n问题：%s\n答案：%s\n学习成功:)' % (unicode(question, "utf-8"), message)
 
 
 class Game:
@@ -138,6 +140,7 @@ class Game:
     def query_coin(msg):
         message = msg[u'content']
         sender_qq = msg[u'sender_qq']
+        sender_qq = str(sender_qq)
         if msg[u'type'] == u'group_message':
             message = message.replace(u'/', u'').strip()
         if message.lower() in ReplyStrings.query_coin:
@@ -154,7 +157,9 @@ class Game:
     def get_joke(msg):
         message = msg[u'content']
         gid = msg[u'gnumber']
+        gid = str(gid)
         sender_qq = msg[u'sender_qq']
+        sender_qq = str(sender_qq)
         sender = msg[u'sender']
         if msg[u'type'] == u'group_message':
             message = message.replace(u'/', u'').strip()
@@ -190,19 +195,17 @@ class Game:
                 else:
                     balance = int(balance)
                 if balance < reductions:
-                    return False, "@%s 你只有%s个豆子了,不够购买价值%s的段子了，快教教我吧，能赚豆子哦！" % \
-                           (sender, balance, reductions)
+                    return False, "你只有%s个豆子了,不够购买价值%s的段子了，快教教我吧，能赚豆子哦！" % (balance, reductions)
                 redis_store.decr(key, reductions)
                 balance -= reductions
                 if rank > 21:
                     fee = "付费"
                     num = rank - 20
-                    tip = "[TIP: @%s 你购买了价值%s豆的段子，还剩下%s颗豆子]" % (sender, reductions, balance)
+                    tip = "[TIP: 你购买了价值%s豆的段子，还剩下%s颗豆子]" % (reductions, balance)
                 elif rank == 21:
                     fee = "付费"
                     num = rank - 20
-                    tip = "[TIP: @%s 你购买了价值%s豆的最后一餐付费段子，还剩下%s颗豆子，接下来的20个段子免费哦]" % \
-                          (sender, reductions, balance)
+                    tip = "[TIP: 你购买了价值%s豆的最后一餐付费段子，还剩下%s颗豆子，接下来的20个段子免费哦]" % (reductions, balance)
                 elif rank > 1:
                     fee = '免费'
                     num = rank

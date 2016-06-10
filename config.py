@@ -20,7 +20,7 @@ class ReplyStrings:
     about = [u'about', u'关于', u'你是谁']
     query_coin = [u'我的豆子']
     get_joke = [u'段子']
-    coin_count = u'你还剩%s颗豆子~\n[Tip:\n·教小D知识+10豆\n·和小D聊天+1豆]'
+    coin_count = u'你还剩%s颗豆子~\n·教小D知识+10豆\n·和小D聊天+1豆'
     help = [u'帮助']
     user_help = u'小D有如下指令:\n1、学习\n2、段子\n3、我的豆子\n4、帮助\n向小D发送即可执行'
     disable_group = [u'disable', u'关闭群聊', u'关闭群功能', u'关掉群功能']
