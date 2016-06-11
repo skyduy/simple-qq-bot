@@ -2,7 +2,7 @@
 # coding:utf-8
 
 import logging
-
+import traceback
 from flask import Flask, request
 from model import init_db
 from msg_proc import QQMessage
@@ -20,6 +20,7 @@ def qqbot():
         qq_msg.proc_message()
     except Exception as e:
         print 'Error occor:    %s' % e
+        print traceback.format_exc()
     finally:
         return ''
 

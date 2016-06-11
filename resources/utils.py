@@ -206,7 +206,7 @@ class HandlerMySQL(object):
 class MessageProcessor(object):
     def __init__(self, msg):
         self.message = msg[u'content']
-        self.sender_qq = msg[u'sender_qq']
+        self.sender_qq = str(msg[u'sender_qq'])
         self.gid = str(msg[u'gnumber'])
         self.handler_redis0 = HandlerRedisDB0(self.sender_qq, self.gid)
         self.handler_redis1 = HandlerRedisDB1()
