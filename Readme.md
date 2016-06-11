@@ -21,16 +21,15 @@ PERL_MM_OPT="INSTALL_BASE=/home/your_username/perl5"; export PERL_MM_OPT;
 
 - Then install the package used in python:
 
-change directory into simple-qq-bot by `cd simple-qq-bot`
+Change directory into simple-qq-bot by `cd simple-qq-bot`.
 
-install the package by `pip install -r requirements.txt`
+Install the package by `pip install -r requirements.txt`.
 
 ## How to run
 
-- Create database and create user with privilege.
-- Modify some settings in config.py
-- run the two commands `perl x.pl` and `python qq_bot.py` respectively
-
+- Create database and user with appropriate privilege.
+- Modify some settings in config.py.
+- Run the two commands `perl x.pl` and `python qq_bot.py` respectively.
 
 ## Acknowledgement
 
