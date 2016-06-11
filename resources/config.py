@@ -10,7 +10,7 @@ MYSQL_DB = 'wechat'
 
 
 comm_url = "http://127.0.0.1:60001"
-filter_path = r'C:\Users\skyduy\Git_home\simple-qq-bot\resources\text_filter\keywords'
+filter_path = r'path\to\simple-qq-bot\resources\text_filter\keywords'  # 绝对路径
 
 
 class ReplyStrings(object):
