@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # coding:utf-8
 
+import logging
+
 from flask import Flask, request
-import traceback, logging
-from msg_proc import QQMessage
 from model import init_db
+from msg_proc import QQMessage
 
 app = Flask(__name__)
 db = init_db(app)
@@ -12,16 +13,13 @@ with app.app_context():
     db.create_all()
 
 
-def qqbot_main(data):
-    QQMessage(data).proc_message()
-
-
 @app.route("/bot", methods=['POST'])
 def qqbot():
     try:
-        qqbot_main(request.data)
-    except:
-        print traceback.format_exc()
+        qq_msg = QQMessage(request.data)
+        qq_msg.proc_message()
+    except Exception as e:
+        print 'Error occor:    %s' % e
     finally:
         return ''
 
