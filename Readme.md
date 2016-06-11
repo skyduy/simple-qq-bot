@@ -25,6 +25,8 @@ Change directory into simple-qq-bot by `cd simple-qq-bot`.
 
 Install the package by `pip install -r requirements.txt`.
 
+If you see error about "EnvironmentError: mysql_config not found", try `sudo apt-get install libmysqlclient-dev` and `pip install -r requirements` again. 
+
 ## How to run
 
 - Create database and user with appropriate privilege.
