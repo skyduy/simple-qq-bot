@@ -51,17 +51,17 @@ class HandlerRedisDB0(object):
 
     def active(self):
         self.redis.sadd('daily_active_user', self.sender_qq)
-        self.redis.sadd('active_qq', self.sender_qq)
+        self.redis.sadd('active_group_%s_qq' % self.gid, self.sender_qq)
         self.redis.set(self.sender_qq, self.nickname)
 
     def get_money_dict(self):
         money_dict = {}
-        active_qqs = self.redis.smembers('active_qq')
+        active_qqs = self.redis.smembers('active_group_%s_qq' % self.gid)
         for qq in active_qqs:
             nickname = self.redis.get(qq)
             money = self.redis.get('money-%s' % qq)
             if money is not None and nickname is not None:
-                money_dict[nickname] = money
+                money_dict[nickname] = int(money)
         return money_dict
 
     def enable_group_replay(self):
@@ -280,8 +280,9 @@ class MessageProcessor(object):
         money_dict = self.handler_redis0.get_money_dict()
         message = '本群活跃用户豆子排行如下:'
         count = 0
-        for nickname, money in money_dict.iteritems():
-            message += '\n@%s : %s' % (nickname, money)
+        money_list = sorted(money_dict.iteritems(), key=lambda d: d[1], reverse=True)
+        for nickname, money in money_list:
+            message += '\n@%s : %s' % (unicode(nickname, 'utf-8'), money)
             count += 1
             if count >= 10:
                 break
