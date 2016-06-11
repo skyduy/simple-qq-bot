@@ -29,7 +29,7 @@ Install the package by `pip install -r requirements.txt`.
 
 - Create database and user with appropriate privilege.
 - Modify some settings in config.py.
-- Run the two commands `perl x.pl` and `python qq_bot.py` respectively.
+- Change directory into simple-qq-bot/resources/ and run the two commands `perl x.pl` and `python qq_bot.py` respectively.
 
 ## Acknowledgement
 
