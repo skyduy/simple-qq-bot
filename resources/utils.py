@@ -319,7 +319,7 @@ class MessageProcessor(object):
                 qa_id = self.handler_sql.add_valid_qa(question, self.message)
                 self.handler_redis0.add_money(10)
                 self.handler_redis1.content_to_redis(question, qa_id)
-                return '问题：%s\n答案：%s\n学习成功:)' % (unicode(question, 'utf-8'), self.message)
+                return '\n问题：%s\n答案：%s\n学习成功:)' % (unicode(question, 'utf-8'), self.message)
 
     def process(self):
         if not self.send_to_me():
