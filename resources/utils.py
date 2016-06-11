@@ -43,16 +43,38 @@ class UserMod(object):
 
 
 class HandlerRedisDB0(object):
-    def __init__(self, sender_qq, gid):
+    def __init__(self, sender_qq, gid, nickname):
         self.redis = Redis('localhost', 6379)
         self.sender_qq = sender_qq
         self.gid = gid
+        self.nickname = nickname
+
+    def active(self):
+        self.redis.sadd('daily_active_user', self.sender_qq)
+        self.redis.sadd('active_qq', self.sender_qq)
+        self.redis.set(self.sender_qq, self.nickname)
+
+    def get_money_dict(self):
+        money_dict = {}
+        active_qqs = self.redis.smembers('active_qq')
+        for qq in active_qqs:
+            nickname = self.redis.get(qq)
+            money = self.redis.get('money-%s' % qq)
+            if money is not None and nickname is not None:
+                money_dict[nickname] = money
+        return money_dict
 
     def enable_group_replay(self):
         self.redis.set('group-%s-enable' % self.gid, 1)
 
     def disable_group_replay(self):
         self.redis.set('group-%s-enable' % self.gid, 0)
+
+    def reply_group(self):
+        r = self.redis.get('group-%s-enable' % self.gid)
+        if r is not None and r == '0':
+            return False
+        return True
 
     def get_state(self):
         r = self.redis.get('state-' + self.sender_qq)
@@ -208,7 +230,8 @@ class MessageProcessor(object):
         self.message = msg[u'content']
         self.sender_qq = str(msg[u'sender_qq'])
         self.gid = str(msg[u'gnumber'])
-        self.handler_redis0 = HandlerRedisDB0(self.sender_qq, self.gid)
+        self.sender = msg[u'sender']
+        self.handler_redis0 = HandlerRedisDB0(self.sender_qq, self.gid, self.sender)
         self.handler_redis1 = HandlerRedisDB1()
         self.handler_sql = HandlerMySQL(self.sender_qq)
         self.text_filter = DFAFilter(filter_path)
@@ -216,6 +239,9 @@ class MessageProcessor(object):
     def send_to_me(self):
         if self.message.startswith(u'/'):
             self.message = self.message[1:].strip().lower()
+            self.handler_redis0.active()
+            if not self.handler_redis0.reply_group() and self.message not in ReplyStrings.enable_group:
+                return False
             return True
         return False
 
@@ -228,20 +254,49 @@ class MessageProcessor(object):
             return None
 
     def change_reply_state(self):
+        is_reply_state = self.handler_redis0.reply_group()
         u = UserMod()
         r = u.check_group_admin(self.gid, self.sender_qq)
         if r == u.IS_ADMIN:
             if self.message in ReplyStrings.enable_group:
-                self.handler_redis0.enable_group_replay()
-                return ReplyStrings.group_enable
+                if not is_reply_state:
+                    self.handler_redis0.enable_group_replay()
+                    return ReplyStrings.group_enable
+                else:
+                    return '已处于群聊开启状态 :)'
             else:
-                self.handler_redis0.disable_group_replay()
-                return ReplyStrings.group_disable
+                if is_reply_state:
+                    self.handler_redis0.disable_group_replay()
+                    return ReplyStrings.group_disable
+                else:
+                    return None
         return ReplyStrings.group_admin_info[r]
 
     def query_coin(self):
         balance = self.handler_redis0.get_money()
         return '你还剩%s颗豆子~\n·教我知识+10豆\n·和我聊天+1豆' % balance
+
+    def get_ranking(self):
+        money_dict = self.handler_redis0.get_money_dict()
+        message = '本群活跃用户豆子排行如下:'
+        count = 0
+        for nickname, money in money_dict.iteritems():
+            message += '\n@%s : %s' % (nickname, money)
+            count += 1
+            if count >= 10:
+                break
+        return message
+
+    def lotto(self):
+        money = self.handler_redis0.get_money()
+        if money < 30:
+            return '一次消耗30豆！你仅剩颗%s个豆子,不能乐透了！' % money
+        self.handler_redis0.reduce_money(30)
+        got = int(random.normalvariate(25, 5))
+        got = max(got, 2)
+        got = min(got, 150)
+        self.handler_redis0.add_money(got)
+        return '你抽中了%d颗豆子！人品好的话最高可赢150颗哦~' % got
 
     def get_joke(self):
         joke, rank = self.handler_redis0.get_joke_rank()
@@ -334,6 +389,12 @@ class MessageProcessor(object):
 
         if self.message in ReplyStrings.query_coin:
             return self.query_coin()
+
+        if self.message in ReplyStrings.get_ranking:
+            return self.get_ranking()
+
+        if self.message in ReplyStrings.lotto:
+            return self.lotto()
 
         if self.message in ReplyStrings.get_joke:
             return self.get_joke()
