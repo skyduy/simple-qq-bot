@@ -227,7 +227,7 @@ class HandlerMySQL(object):
 
 class MessageProcessor(object):
     def __init__(self, msg):
-        self.message = msg[u'content']
+        self.message = msg[u'content'].strip()
         self.sender_qq = str(msg[u'sender_qq'])
         self.gid = str(msg[u'gnumber'])
         self.sender = msg[u'sender']
@@ -237,7 +237,7 @@ class MessageProcessor(object):
         self.text_filter = DFAFilter(filter_path)
 
     def send_to_me(self):
-        if self.message.startswith(u'/'):
+        if self.message.startswith(u'/') or self.message.startswith(u'／'):
             self.message = self.message[1:].strip().lower()
             self.handler_redis0.active()
             if not self.handler_redis0.reply_group() and self.message not in ReplyStrings.enable_group:
@@ -293,7 +293,7 @@ class MessageProcessor(object):
         if money < 30:
             return '一次消耗30豆！你仅剩颗%s个豆子,不能乐透了！' % money
         self.handler_redis0.reduce_money(30)
-        got = int(random.normalvariate(25, 5))
+        got = int(random.normalvariate(30, 20))
         got = max(got, 2)
         got = min(got, 150)
         self.handler_redis0.add_money(got)
