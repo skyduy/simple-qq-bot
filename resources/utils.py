@@ -51,6 +51,7 @@ class HandlerRedisDB0(object):
 
     def active(self):
         self.redis.sadd('daily_active_user', self.sender_qq)
+        self.redis.sadd('daily_active_group', self.gid)
         self.redis.sadd('active_group_%s_qq' % self.gid, self.sender_qq)
         self.redis.set(self.sender_qq, self.nickname)
 
