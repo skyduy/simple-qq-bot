@@ -43,11 +43,12 @@ class UserMod(object):
 
 
 class HandlerRedisDB0(object):
-    def __init__(self, sender_qq, gid, nickname):
+    def __init__(self, sender_qq, gid, nickname, enable_filter=False):
         self.redis = Redis('localhost', 6379)
         self.sender_qq = sender_qq
         self.gid = gid
         self.nickname = nickname
+        self.filter_enabled = enable_filter
 
     def active(self):
         self.redis.sadd('daily_active_user', self.sender_qq)
@@ -232,14 +233,17 @@ class MessageProcessor(object):
         self.sender_qq = str(msg[u'sender_qq'])
         self.gid = str(msg[u'gnumber'])
         self.sender = msg[u'sender']
-        self.handler_redis0 = HandlerRedisDB0(self.sender_qq, self.gid, self.sender)
+        self.handler_redis0 = HandlerRedisDB0(self.sender_qq, self.gid, self.sender, enable_filter=False)
         self.handler_redis1 = HandlerRedisDB1()
         self.handler_sql = HandlerMySQL(self.sender_qq)
         self.text_filter = DFAFilter(filter_path)
+        self.too_long = False
 
     def send_to_me(self):
         if self.message.startswith(u'/') or self.message.startswith(u'／'):
             self.message = self.message[1:].strip().lower()
+            if len(self.message.encode('utf-8')) >= 690:
+                self.too_long = True
             self.handler_redis0.active()
             if not self.handler_redis0.reply_group() and self.message not in ReplyStrings.enable_group:
                 return False
@@ -368,15 +372,17 @@ class MessageProcessor(object):
             question = self.handler_redis0.get_question()
             if not question:
                 return '呜...小D只知道你在一小时或者更久之前问过问题，但是忘记问题是什么了...'
-
-            if self.text_filter.included_in(self.message):
+            if self.handler_redis0.filter_enabled and self.text_filter.included_in(self.message):
                 self.handler_sql.add_sensitive_qa(question, self.message)
                 return '(#ﾟДﾟ)！小D检测到您的回答中有敏感词汇，学习失败。'
             else:
                 qa_id = self.handler_sql.add_valid_qa(question, self.message)
                 self.handler_redis0.add_money(10)
                 self.handler_redis1.content_to_redis(question, qa_id)
-                return '\n问题：%s\n答案：%s\n学习成功:)' % (unicode(question, 'utf-8'), self.message)
+                reply = '\n问题：%s\n答案：%s\n学习成功:)' % (unicode(question, 'utf-8'), self.message)
+                if len(reply.encode('utf-8')) > 698:
+                    return '\n学习成功 :)\n[Tip: 消息太长，恕无法给予其它提示]'
+                return reply
 
     def process(self):
         if not self.send_to_me():
